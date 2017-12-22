@@ -3,6 +3,8 @@ package com.github.siilas.notagenerator.service;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -29,13 +31,13 @@ public class GeradorNota {
     private static final String MANUAL = "2";
     private static final List<String> OPCOES = Arrays.asList(NFE, MANUAL);
 
-    public void gerar(String caminhoXml, String opcao) throws Exception {
+    public void gerar(String caminhoXml, String opcao, String caminhoLogo) throws Exception {
         File nota = new File(caminhoXml);
         validar(nota, opcao);
         if (NFE.equals(opcao)) {
-            geraDanfeNfe(nota, getPdfName(caminhoXml));
+            geraDanfeNfe(nota, getPdfName(caminhoXml, opcao), caminhoLogo);
         } else if (MANUAL.equals(opcao)) {
-            geraDanfeManual(nota, getPdfName(caminhoXml));
+            geraDanfeManual(nota, getPdfName(caminhoXml, opcao), caminhoLogo);
         }
     }
 
@@ -48,16 +50,15 @@ public class GeradorNota {
         }
     }
 
-    private String getPdfName(String caminhoXml) {
-        return caminhoXml.replace(".xml", ".pdf");
+    private String getPdfName(String caminhoXml, String opcao) {
+        return caminhoXml.replace(".xml", "_" + opcao + ".pdf");
     }
 
-    private void geraDanfeNfe(File xmlNota, String arquivoDestino) {
+    private void geraDanfeNfe(File xmlNota, String arquivoDestino, String caminhoLogo) {
         try {
-            byte[] logo = null;
             NFNotaProcessada notaProcessada = new NotaParser().notaProcessadaParaObjeto(xmlNota);
             NFDanfeReport report = new NFDanfeReport(notaProcessada);
-            byte[] pdf = report.gerarDanfeNFe(logo);
+            byte[] pdf = report.gerarDanfeNFe(getLogo(caminhoLogo));
             FileOutputStream output = new FileOutputStream(arquivoDestino);
             output.write(pdf);
             output.close();
@@ -66,17 +67,27 @@ public class GeradorNota {
         }
     }
 
-    private void geraDanfeManual(File xmlNota, String arquivoDestino) {
+    private void geraDanfeManual(File xmlNota, String arquivoDestino, String caminhoLogo) {
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             DocumentBuilder builder = factory.newDocumentBuilder();
             Document document = builder.parse(xmlNota);
             InputStream jasper = getClass().getResourceAsStream("/reports/danfe.jasper");
             JRXmlDataSource dataSource = new JRXmlDataSource(document, "/nfeProc/NFe/infNFe/det");
-            JasperPrint report = JasperFillManager.fillReport(jasper, new HashMap<>(), dataSource);
+            HashMap<String, Object> params = new HashMap<>();
+            params.put("Logo", caminhoLogo);
+            JasperPrint report = JasperFillManager.fillReport(jasper, params, dataSource);
             JasperExportManager.exportReportToPdfFile(report, arquivoDestino);
         } catch (Exception e) {
             Logger.error("Erro gerar DANFE (Manual)", e);
+        }
+    }
+
+    private byte[] getLogo(String caminhoLogo) {
+        try {
+            return Files.readAllBytes(Paths.get(caminhoLogo));
+        } catch (Exception e) {
+            return null;
         }
     }
 
